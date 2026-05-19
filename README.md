@@ -52,25 +52,36 @@ Estos son los archivos que realmente están en uso. Los de esta carpeta son solo
 
 ## Instalación desde cero
 
-### 1. Requisitos
+### 1. Dependencias del sistema
+
+> El script Python (`handy-ai-bridge`) usa solo la stdlib — no hay paquetes pip. Todo lo que necesitas son estas herramientas del sistema:
 
 ```bash
-# Handy (AUR)
+# Handy — app de transcripción de voz (AUR)
 yay -S handy
 
-# Claude Code CLI
+# wtype — escribe texto en ventanas Wayland
+sudo pacman -S wtype
+
+# aplay — reproduce audio (normalmente ya está instalado)
+sudo pacman -S alsa-utils
+
+# notify-send — notificaciones de escritorio
+sudo pacman -S libnotify
+
+# Claude Code CLI — asistente Claude
 # Seguir instrucciones en https://claude.ai/code
 
-# Codex CLI
+# Codex CLI — asistente GPT-4o de OpenAI
 # Seguir instrucciones de OpenAI Codex CLI
 
-# piper TTS
-# Descargar binario desde https://github.com/rhasspy/piper/releases
-# Colocar en ~/.local/bin/piper
-# Modelo de voz: es_ES-davefx-medium.onnx → ~/.local/share/piper/voices/
-
-# wtype (para escribir en ventanas Wayland)
-sudo pacman -S wtype
+# piper TTS — síntesis de voz local
+# 1. Descargar el binario desde https://github.com/rhasspy/piper/releases
+#    y colocarlo en ~/.local/bin/piper
+# 2. Descargar el modelo de voz:
+#    https://github.com/rhasspy/piper/blob/master/VOICES.md
+#    Modelo recomendado: es_ES-davefx-medium
+#    Colocar el .onnx y .onnx.json en ~/.local/share/piper/voices/
 ```
 
 ### 2. Copiar los scripts
