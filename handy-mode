@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+# Escribe el modo AI y dispara Handy. Uso: handy-mode <claude|codex>-<speak|type>
+printf '%s' "$1" > /tmp/handy-ai-mode
+handy --toggle-transcription

@@ -1,0 +1,145 @@
+#!/usr/bin/env python3
+"""
+Handy AI Bridge — recibe la transcripción de Handy y la enruta:
+  - Sin modo activo  → dictado normal (wtype)
+  - claude-speak     → Claude CLI → TTS (piper)
+  - claude-type      → Claude CLI → escribe en ventana activa
+  - codex-speak      → Codex CLI → TTS (piper)
+  - codex-type       → Codex CLI → escribe en ventana activa
+
+El modo se escribe en /tmp/handy-ai-mode antes de disparar Handy.
+Handy llama a este script con el texto transcrito via stdin o argv[1].
+"""
+
+import sys
+import os
+import subprocess
+
+MODE_FILE = "/tmp/handy-ai-mode"
+PIPER_MODEL = os.path.expanduser("~/.local/share/piper/voices/es_ES-davefx-medium.onnx")
+PIPER_LIBS = os.path.expanduser("~/.local/lib/piper")
+CODEX_OUT = "/tmp/handy-codex-response.txt"
+
+
+def get_text():
+    if len(sys.argv) > 1:
+        return " ".join(sys.argv[1:]).strip()
+    try:
+        return sys.stdin.read().strip()
+    except Exception:
+        return ""
+
+
+def notify(title, body, timeout=4000):
+    subprocess.Popen(
+        ["notify-send", title, body, "-t", str(timeout)],
+        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+    )
+
+
+def speak(text):
+    env = os.environ.copy()
+    env["LD_LIBRARY_PATH"] = PIPER_LIBS
+
+    if os.path.exists(PIPER_MODEL):
+        piper = subprocess.Popen(
+            ["piper", "--model", PIPER_MODEL, "--output-raw"],
+            stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL, env=env,
+        )
+        aplay = subprocess.Popen(
+            ["aplay", "-q", "-r", "22050", "-f", "S16_LE", "-t", "raw", "-"],
+            stdin=piper.stdout, stderr=subprocess.DEVNULL,
+        )
+        piper.stdin.write(text.encode())
+        piper.stdin.close()
+        piper.stdout.close()
+        aplay.wait()
+    else:
+        subprocess.run(
+            ["espeak-ng", "-v", "es", "-s", "145", "--", text],
+            stderr=subprocess.DEVNULL,
+        )
+
+
+def type_text(text):
+    subprocess.run(["wtype", "--", text])
+
+
+def ask_claude(text):
+    result = subprocess.run(
+        [
+            "claude", "--print",
+            "--dangerously-skip-permissions",
+            "--no-session-persistence",
+            "--append-system-prompt",
+            "Responde de forma concisa y natural. Sin markdown, sin listas, "
+            "en texto plano para lectura en voz alta.",
+        ],
+        input=text, capture_output=True, text=True,
+    )
+    return result.stdout.strip()
+
+
+def ask_codex(text):
+    try:
+        os.unlink(CODEX_OUT)
+    except FileNotFoundError:
+        pass
+
+    prompt = f"{text}\nResponde en texto plano, sin markdown, de forma concisa."
+    subprocess.run(
+        ["codex", "exec", "--dangerously-bypass-approvals-and-sandbox", "-o", CODEX_OUT],
+        input=prompt, text=True, stderr=subprocess.DEVNULL,
+    )
+
+    try:
+        with open(CODEX_OUT) as f:
+            return f.read().strip()
+    except FileNotFoundError:
+        return ""
+
+
+def main():
+    text = get_text()
+    if not text:
+        sys.exit(0)
+
+    # Sin modo activo → dictado normal
+    if not os.path.exists(MODE_FILE):
+        type_text(text)
+        return
+
+    with open(MODE_FILE) as f:
+        mode = f.read().strip()
+    try:
+        os.unlink(MODE_FILE)
+    except FileNotFoundError:
+        pass
+
+    ai, _, output = mode.partition("-")
+    output = output or "speak"
+
+    notify(ai.capitalize(), f"🗣️ {text}", 5000)
+
+    if ai == "claude":
+        response = ask_claude(text)
+    elif ai == "codex":
+        response = ask_codex(text)
+    else:
+        return
+
+    if not response:
+        notify(ai.capitalize(), "❌ Sin respuesta", 2500)
+        return
+
+    if output == "speak":
+        notify(ai.capitalize(), f"💬 {response}", 14000)
+        speak(response)
+    else:
+        type_text(response)
+        notify(ai.capitalize(), "✅ Respuesta escrita", 2500)
+
+
+if __name__ == "__main__":
+    main()
